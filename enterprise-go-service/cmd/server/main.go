@@ -29,6 +29,11 @@ func main() {
 	}
 	defer zapLogger.Sync()
 
+	if err := database.RunMigrations(); err != nil {
+		zapLogger.Fatal("failed to run database migrations", zap.Error(err))
+	}
+	zapLogger.Info("database migrations applied successfully")
+
 	dbPool, err := database.NewPostgresPool(ctx)
 	if err != nil {
 		zapLogger.Fatal("failed to connect to postgres", zap.Error(err))

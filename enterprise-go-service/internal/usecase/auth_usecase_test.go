@@ -38,6 +38,19 @@ func (m *MockUserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
 	return args.Get(0).(*domain.User), args.Error(1)
 }
 
+func (m *MockUserRepository) Update(ctx context.Context, user *domain.User) error {
+	args := m.Called(ctx, user)
+	return args.Error(0)
+}
+
+func (m *MockUserRepository) List(ctx context.Context, pq domain.PaginationQuery) ([]*domain.User, int64, error) {
+	args := m.Called(ctx, pq)
+	if args.Get(0) == nil {
+		return nil, args.Get(1).(int64), args.Error(2)
+	}
+	return args.Get(0).([]*domain.User), args.Get(1).(int64), args.Error(2)
+}
+
 func TestAuthUseCase_Register_Success(t *testing.T) {
 	mockRepo := new(MockUserRepository)
 	mockRepo.On("GetByEmail", mock.Anything, "test@example.com").Return(nil, domain.ErrNotFound)

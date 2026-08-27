@@ -6,6 +6,7 @@ import (
 
 	"enterprise-go-service/internal/delivery/http/handler"
 	"enterprise-go-service/internal/delivery/http/middleware"
+	"enterprise-go-service/internal/domain"
 
 	"go.uber.org/zap"
 )
@@ -26,10 +27,13 @@ func NewRouter(authHandler *handler.AuthHandler, userHandler *handler.UserHandle
 	mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
 
-	protectedMux := http.NewServeMux()
-	protectedMux.HandleFunc("GET /api/v1/users/profile", userHandler.GetProfile)
+	profileMux := http.NewServeMux()
+	profileMux.HandleFunc("GET /api/v1/users/profile", userHandler.GetProfile)
+	mux.Handle("/api/v1/users/profile", middleware.AuthMiddleware(middleware.RequirePermission(domain.PermissionReadProfile)(profileMux)))
 
-	mux.Handle("/api/v1/users/", middleware.AuthMiddleware(protectedMux))
+	adminMux := http.NewServeMux()
+	adminMux.HandleFunc("GET /api/v1/admin/users", userHandler.ListUsers)
+	mux.Handle("/api/v1/admin/", middleware.AuthMiddleware(middleware.RequirePermission(domain.PermissionManageSystem)(adminMux)))
 
 	rateLimiter := middleware.NewRateLimiter()
 

@@ -71,7 +71,7 @@ Ensure you have the following installed on your system:
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/enterprise-go-service.git
+   git clone https://github.com/Nethru2002/Enterprise-User-Management-Authentication-Microservice.git 
    cd enterprise-go-service
    ```
 

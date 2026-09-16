@@ -1,13 +1,13 @@
-# Identity & Access Management (IAM) Microservice
+# Auth Service — Production-Grade IAM Microservice
 
 [![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://golang.org/)
 [![Architecture](https://img.shields.io/badge/Architecture-Clean%20Architecture-blue?style=flat)](#architecture-overview)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Build Status](https://img.shields.io/badge/Production%20Grade-Gold%20Tier-gold)](#enterprise-security--production-standards)
+[![Production Grade](https://img.shields.io/badge/Production%20Grade-Gold%20Tier-gold)](#enterprise-security--production-standards)
 
-A high-throughput, horizontally scalable, production-grade **Identity and Access Management (IAM)** microservice built in **Go (Golang)**. Designed strictly following **Clean Architecture**, **Domain-Driven Design (DDD)** primitives, and the official **Standard Go Project Layout**.
+A high-throughput, horizontally scalable, production-grade **Identity & Access Management (IAM)** microservice built in **Go (Golang)** following strict **Clean Architecture**, **Domain-Driven Design (DDD)** principles, and the official **Standard Go Project Layout**.
 
-This service implements zero-trust asymmetric cryptography (`RS256`), dynamic RFC 7517 public JWKS discovery, atomic distributed rate-limiting via Redis Lua, Prometheus observability, and SOC 2 / ISO 27001-ready structured security audit logging.
+This service implements zero-trust asymmetric cryptography (`RS256` / RSA-4096), dynamic RFC 7517 public JWKS discovery, atomic distributed token-bucket rate limiting via Redis Lua, Prometheus observability, and SOC 2 / ISO 27001-ready structured security audit logging.
 
 ---
 
@@ -20,7 +20,7 @@ This service implements zero-trust asymmetric cryptography (`RS256`), dynamic RF
 - [Prerequisites](#prerequisites)
 - [Configuration & Environment Variables](#configuration--environment-variables)
 - [Getting Started](#getting-started)
-  - [1. Running with Docker Compose](#1-running-with-docker-compose-recommended)
+  - [1. Running with Docker Compose (Recommended)](#1-running-with-docker-compose-recommended)
   - [2. Running Standalone Locally](#2-running-standalone-locally)
 - [Running Tests](#running-tests)
 - [API Reference & Route Matrix](#api-reference--route-matrix)
@@ -32,7 +32,7 @@ This service implements zero-trust asymmetric cryptography (`RS256`), dynamic RF
 
 ## Architecture Overview
 
-The system isolates domain logic from infrastructure adapters using a multi-tiered Clean Architecture approach:
+The system strictly isolates domain logic from infrastructure adapters using a multi-tiered Clean Architecture approach:
 
 ```text
                HTTP Requests (Clients / API Gateways)
@@ -40,7 +40,7 @@ The system isolates domain logic from infrastructure adapters using a multi-tier
                                ▼
  ┌───────────────────────────────────────────────────────────┐
  │               Presentation / Delivery Layer               │
- │  • Router & Handlers (Auth, User, Health)                 │
+ │  • Handlers: Auth, User, Health, JWKS                     │
  │  • Middlewares: RS256 Auth, RBAC, Rate-Limit, Metrics     │
  └─────────────────────────────┬─────────────────────────────┘
                                │ (DTOs)
@@ -78,7 +78,7 @@ The system isolates domain logic from infrastructure adapters using a multi-tier
 | **Concurrency** | **PostgreSQL Unique Constraints (`23505`)** | Prevents Time-of-Check to Time-of-Use (TOCTOU) race conditions during concurrent registrations. |
 | **Traffic Shaping** | **Distributed Token-Bucket (Redis Lua)** | Atomic, proxy-aware (`X-Forwarded-For`) sliding rate limiter enforced across multi-replica deployments. |
 | **Observability** | **Prometheus + Uber Zap JSON** | Four Golden Signals exposed via `/metrics` alongside structured logs tracking `request_id` and `trace_id`. |
-| **Compliance** | **Immutable Security Audit Log** | Explicit logging trail (`SECURITY_AUDIT_TRAIL`) logging event type, actor email, IP address, and timestamps. |
+| **Compliance** | **Immutable Security Audit Log** | Explicit logging trail (`SECURITY_AUDIT_TRAIL`) recording event type, actor email, IP address, and timestamps. |
 
 ---
 
@@ -160,7 +160,7 @@ auth-service/
 │       ├── response.go                # Standardized JSON response envelope
 │       └── validator.go               # Email cleaning & password rule validation
 ├── .env.example                       # Environment configuration template
-├── .gitignore                         # Build, binary, secret, and OS exclusion rules
+├── .gitignore                         # Clean build, secret, and OS exclusions
 ├── Dockerfile                         # Production multi-stage minimal container
 ├── docker-compose.yml                 # Full stack container orchestrator
 ├── go.mod                             # Go module definitions
@@ -175,7 +175,7 @@ auth-service/
 - **Go:** `1.22` or higher
 - **PostgreSQL:** `15` or higher
 - **Redis:** `7.x` or higher
-- **Docker & Docker Compose:** *(Optional, recommended for immediate setup)*
+- **Docker & Docker Compose:** *(Optional, recommended for immediate containerized setup)*
 
 ---
 
@@ -194,7 +194,7 @@ cp .env.example .env
 | `DB_PORT` | PostgreSQL port | `5432` |
 | `DB_USER` | PostgreSQL user | `postgres` |
 | `DB_PASSWORD` | PostgreSQL user password | *Required* |
-| `DB_NAME` | Database name | `enterprise_db` |
+| `DB_NAME` | Database name | `auth_db` |
 | `DB_SSLMODE` | PostgreSQL SSL mode (`disable`, `require`) | `disable` |
 | `DB_MAX_CONNS` | Maximum database connection pool capacity | `25` |
 | `DB_MIN_CONNS` | Minimum idle database connections | `5` |
@@ -211,7 +211,7 @@ cp .env.example .env
 
 ### 1. Running with Docker Compose (Recommended)
 
-Starts PostgreSQL, Redis, and the compiled `auth-service` application with auto-healing and health checks:
+Starts PostgreSQL (`auth-postgres`), Redis (`auth-redis`), and the compiled application (`auth-service`) with automatic health checks:
 
 ```bash
 docker compose up -d --build
@@ -231,37 +231,13 @@ docker compose down
 
 ### 2. Running Standalone Locally
 
-#### Step 1: Start PostgreSQL and Redis via Docker
-```bash
-# PostgreSQL
-docker run --name enterprise-postgres \
-  -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=nethru2002 \
-  -e POSTGRES_DB=enterprise_db \
-  -p 5432:5432 -d postgres:16-alpine
-
-# Redis
-docker run --name enterprise-redis \
-  -p 6379:6379 -d redis:7-alpine
+#### Step 1: Start PostgreSQL and Redis Containers
+```powershell
+docker run --name auth-postgres -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=nethru2002 -e POSTGRES_DB=auth_db -p 5432:5432 -d postgres:16-alpine
+docker run --name auth-redis -p 6379:6379 -d redis:7-alpine
 ```
 
 #### Step 2: Set Environment Variables & Start the Service
-
-##### On Linux / macOS / Git Bash:
-```bash
-export APP_PORT=8080
-export DB_HOST=localhost
-export DB_PORT=5432
-export DB_USER=postgres
-export DB_PASSWORD=nethru2002
-export DB_NAME=enterprise_db
-export DB_SSLMODE=disable
-export REDIS_HOST=localhost
-export REDIS_PORT=6379
-export REDIS_PASSWORD=""
-
-go run cmd/server/main.go
-```
 
 ##### On Windows (PowerShell):
 ```powershell
@@ -270,11 +246,27 @@ $env:DB_HOST="localhost"
 $env:DB_PORT="5432"
 $env:DB_USER="postgres"
 $env:DB_PASSWORD="nethru2002"
-$env:DB_NAME="enterprise_db"
+$env:DB_NAME="auth_db"
 $env:DB_SSLMODE="disable"
 $env:REDIS_HOST="localhost"
 $env:REDIS_PORT="6379"
 $env:REDIS_PASSWORD=""
+
+go run cmd/server/main.go
+```
+
+##### On Linux / macOS / Git Bash:
+```bash
+export APP_PORT=8080
+export DB_HOST=localhost
+export DB_PORT=5432
+export DB_USER=postgres
+export DB_PASSWORD=nethru2002
+export DB_NAME=auth_db
+export DB_SSLMODE=disable
+export REDIS_HOST=localhost
+export REDIS_PORT=6379
+export REDIS_PASSWORD=""
 
 go run cmd/server/main.go
 ```
@@ -332,23 +324,17 @@ All API endpoints return a standardized JSON structure:
 > **Note for Windows PowerShell users:** Use `curl.exe` instead of `curl` to avoid PowerShell's built-in `Invoke-WebRequest` alias.
 
 ### 1. Register a Standard User
-```bash
-curl -i -X POST http://localhost:8080/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "alice@enterprise.com",
-    "password": "StrongPassword123"
-  }'
+```powershell
+curl.exe -i -X POST http://localhost:8080/api/v1/auth/register `
+  -H "Content-Type: application/json" `
+  -d '{"email":"alice@enterprise.com","password":"StrongPassword123"}'
 ```
 
 ### 2. Authenticate & Obtain Tokens
-```bash
-curl -i -X POST http://localhost:8080/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "alice@enterprise.com",
-    "password": "StrongPassword123"
-  }'
+```powershell
+curl.exe -i -X POST http://localhost:8080/api/v1/auth/login `
+  -H "Content-Type: application/json" `
+  -d '{"email":"alice@enterprise.com","password":"StrongPassword123"}'
 ```
 
 **Response (`200 OK`):**
@@ -365,44 +351,40 @@ curl -i -X POST http://localhost:8080/api/v1/auth/login \
 ```
 
 ### 3. Access Protected Profile
-```bash
-curl -i -X GET http://localhost:8080/api/v1/users/profile \
+```powershell
+curl.exe -i -X GET http://localhost:8080/api/v1/users/profile `
   -H "Authorization: Bearer <ACCESS_TOKEN>"
 ```
 
 ### 4. Refresh Access Token (Token Rotation)
-```bash
-curl -i -X POST http://localhost:8080/api/v1/auth/refresh \
-  -H "Content-Type: application/json" \
-  -d '{
-    "refresh_token": "<REFRESH_TOKEN>"
-  }'
+```powershell
+curl.exe -i -X POST http://localhost:8080/api/v1/auth/refresh `
+  -H "Content-Type: application/json" `
+  -d '{"refresh_token":"<REFRESH_TOKEN>"}'
 ```
 
 ### 5. Logout & Terminate Session
-```bash
-curl -i -X POST http://localhost:8080/api/v1/auth/logout \
-  -H "Content-Type: application/json" \
-  -d '{
-    "refresh_token": "<REFRESH_TOKEN>"
-  }'
+```powershell
+curl.exe -i -X POST http://localhost:8080/api/v1/auth/logout `
+  -H "Content-Type: application/json" `
+  -d '{"refresh_token":"<REFRESH_TOKEN>"}'
 ```
 
 ### 6. Admin RBAC Verification
 1. Register an account intended for administration:
-   ```bash
-   curl -X POST http://localhost:8080/api/v1/auth/register \
-     -H "Content-Type: application/json" \
+   ```powershell
+   curl.exe -i -X POST http://localhost:8080/api/v1/auth/register `
+     -H "Content-Type: application/json" `
      -d '{"email":"admin@enterprise.com","password":"AdminSecurePassword123"}'
    ```
 2. Promote the user directly in PostgreSQL (preventing public role escalation):
-   ```bash
-   docker exec -it enterprise-postgres psql -U postgres -d enterprise_db -c "UPDATE users SET role = 'ADMIN' WHERE email = 'admin@enterprise.com';"
+   ```powershell
+   docker exec -it auth-postgres psql -U postgres -d auth_db -c "UPDATE users SET role = 'ADMIN' WHERE email = 'admin@enterprise.com';"
    ```
-3. Log in as `admin@enterprise.com` to receive an `ADMIN` scoped token.
+3. Log in as `admin@enterprise.com` to receive an `ADMIN`-scoped token.
 4. Access the paginated administration endpoint:
-   ```bash
-   curl -i -X GET "http://localhost:8080/api/v1/admin/users?page=1&limit=10" \
+   ```powershell
+   curl.exe -i -X GET "http://localhost:8080/api/v1/admin/users?page=1&limit=10" `
      -H "Authorization: Bearer <ADMIN_ACCESS_TOKEN>"
    ```
 
@@ -411,20 +393,20 @@ curl -i -X POST http://localhost:8080/api/v1/auth/logout \
 ## Operational & Observability Endpoints
 
 ### 1. Prometheus Telemetry (`/metrics`)
-Exposes live runtime statistics and request histograms:
-```bash
-curl http://localhost:8080/metrics
+Exposes live runtime statistics and request latency histograms:
+```powershell
+curl.exe http://localhost:8080/metrics
 ```
 Monitored metrics:
 - `http_requests_total{method, path, status}`
 - `http_request_duration_seconds{method, path}`
 - `http_active_requests`
-- Go runtime memory, GC pauses, and goroutine counts.
+- Go runtime memory, GC pauses, and goroutine allocations.
 
 ### 2. Downstream Key Discovery (`/.well-known/jwks.json`)
-Exposes public keys for verification by downstream services and API Gateways:
-```bash
-curl http://localhost:8080/.well-known/jwks.json
+Exposes public keys conforming to RFC 7517 for verification by downstream services and API Gateways:
+```powershell
+curl.exe http://localhost:8080/.well-known/jwks.json
 ```
 
 ---

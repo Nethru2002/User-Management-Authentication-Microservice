@@ -35,7 +35,7 @@ func Load() (*Config, error) {
 		DBPort:            getEnv("DB_PORT", "5432"),
 		DBUser:            getEnv("DB_USER", "postgres"),
 		DBPassword:        os.Getenv("DB_PASSWORD"),
-		DBName:            getEnv("DB_NAME", "enterprise_db"),
+		DBName:            getEnv("DB_NAME", "auth_db"),
 		DBSSLMode:         getEnv("DB_SSLMODE", "disable"),
 		DBMaxConns:        getEnvAsInt32("DB_MAX_CONNS", 25),
 		DBMinConns:        getEnvAsInt32("DB_MIN_CONNS", 5),

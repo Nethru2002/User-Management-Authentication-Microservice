@@ -1,4 +1,4 @@
-# Enterprise User Management & Authentication Microservice
+# User Management & Authentication Microservice
 
 An advanced, production-grade, highly scalable user management and authentication microservice built with **Go (Golang)** following strict **Clean Architecture** principles and the official **Standard Go Project Layout**.
 
@@ -9,7 +9,7 @@ An advanced, production-grade, highly scalable user management and authenticatio
 This project implements a decoupled, multi-tier clean architecture pattern to ensure separation of concerns, high testability, and enterprise-grade maintainability:
 
 ```text
-enterprise-go-service/
+iam-microservice/
 ├── cmd/
 │   ├── server/           # Application server bootstrap entrypoint
 │   └── migrate/          # Standalone database migration runner

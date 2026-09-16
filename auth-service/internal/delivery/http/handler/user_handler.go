@@ -9,6 +9,8 @@ import (
 	"auth-service/internal/domain"
 	"auth-service/internal/usecase"
 	"auth-service/pkg/utils"
+
+	"github.com/google/uuid"
 )
 
 type UserHandler struct {
@@ -62,7 +64,13 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		Limit: limit,
 	}
 
-	res, err := h.userUC.ListUsers(r.Context(), pq)
+	// Extract tenant ID from the context (injected by TenantMiddleware)
+	tenantID, ok := r.Context().Value(middleware.TenantContextKey).(uuid.UUID)
+	if !ok {
+		tenantID = domain.DefaultTenantID
+	}
+
+	res, err := h.userUC.ListUsers(r.Context(), tenantID, pq)
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "failed to retrieve user list")
 		return

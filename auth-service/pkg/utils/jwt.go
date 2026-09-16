@@ -3,11 +3,13 @@ package utils
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"math/big"
 	"os"
 	"time"
@@ -38,33 +40,49 @@ type JWKS struct {
 }
 
 func NewKeyManager(privateKeyPath string) (*KeyManager, error) {
+	var privKey *rsa.PrivateKey
+
 	if privateKeyPath != "" {
 		pemBytes, err := os.ReadFile(privateKeyPath)
-		if err == nil {
-			block, _ := pem.Decode(pemBytes)
-			if block != nil {
-				key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-				if err == nil {
-					return &KeyManager{
-						PrivateKey: key,
-						PublicKey:  &key.PublicKey,
-						KeyID:      "auth-service-key-1",
-					}, nil
-				}
+		if err != nil {
+			return nil, fmt.Errorf("failed to read RSA private key file: %w", err)
+		}
+
+		block, _ := pem.Decode(pemBytes)
+		if block == nil {
+			return nil, errors.New("failed to decode PEM block from private key file")
+		}
+
+		// Support both PKCS#1 and PKCS#8
+		if k, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
+			privKey = k
+		} else if keyInterface, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
+			var ok bool
+			privKey, ok = keyInterface.(*rsa.PrivateKey)
+			if !ok {
+				return nil, errors.New("PKCS#8 key is not an RSA private key")
 			}
+		} else {
+			return nil, fmt.Errorf("could not parse private key as PKCS#1 or PKCS#8: %w", err)
+		}
+	} else {
+		// Development fallback: auto-generate in-memory
+		var err error
+		privKey, err = rsa.GenerateKey(rand.Reader, 4096)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate fallback RSA key: %w", err)
 		}
 	}
 
-	// Auto-generate cryptographically secure RSA-4096 key pair if no file provided
-	privKey, err := rsa.GenerateKey(rand.Reader, 4096)
-	if err != nil {
-		return nil, err
-	}
+	pubKey := &privKey.PublicKey
+	// Deterministic RFC 7638 Key ID based on SHA-256 of the public modulus
+	hash := sha256.Sum256(pubKey.N.Bytes())
+	kid := hex.EncodeToString(hash[:8])
 
 	return &KeyManager{
 		PrivateKey: privKey,
-		PublicKey:  &privKey.PublicKey,
-		KeyID:      "auth-service-key-primary",
+		PublicKey:  pubKey,
+		KeyID:      kid,
 	}, nil
 }
 

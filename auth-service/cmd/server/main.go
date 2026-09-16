@@ -21,65 +21,79 @@ import (
 	"auth-service/internal/usecase"
 	"auth-service/pkg/utils"
 
+	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 )
 
 func main() {
+	// 1. Automatically load .env file if it exists locally
+	_ = godotenv.Load()
+
+	// 2. Initialize Structured Production Zap Logger
 	zapLogger, err := logger.NewZapLogger()
 	if err != nil {
 		log.Fatalf("failed to initialize logger: %v", err)
 	}
 	defer zapLogger.Sync()
 
+	// 3. Load and validate strongly typed configuration
 	cfg, err := config.Load()
 	if err != nil {
-		zapLogger.Fatal("configuration load failure", zap.Error(err))
+		zapLogger.Fatal("configuration error", zap.Error(err))
 	}
 
+	// 4. Initialize Asymmetric Key Manager (RS256 / RSA-4096)
 	keyManager, err := utils.NewKeyManager(cfg.RSAPrivateKeyPath)
 	if err != nil {
 		zapLogger.Fatal("failed to initialize RSA Key Manager", zap.Error(err))
 	}
 
+	// 5. Initialize Observability & SRE Tools
 	auditLogger := logger.NewAuditLogger(zapLogger)
+	emailSender := utils.NewConsoleEmailSender(zapLogger)
 	metricsCollector := metrics.NewMetrics()
 
+	// 6. Apply Database Migrations (PostgreSQL)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := database.RunMigrations(cfg); err != nil {
-		zapLogger.Fatal("failed to execute migrations", zap.Error(err))
+		zapLogger.Fatal("database migration failure", zap.Error(err))
 	}
-	zapLogger.Info("database migrations verified")
+	zapLogger.Info("database migrations verified and applied")
 
+	// 7. Connect to PostgreSQL Pool
 	dbPool, err := database.NewPostgresPool(ctx, cfg)
 	if err != nil {
-		zapLogger.Fatal("failed to initialize postgres pool", zap.Error(err))
+		zapLogger.Fatal("failed to connect to postgres pool", zap.Error(err))
 	}
 	defer dbPool.Close()
 
+	// 8. Connect to Redis Client
 	redisClient, err := cache.NewRedisClient(ctx, cfg)
 	if err != nil {
-		zapLogger.Fatal("failed to initialize redis client", zap.Error(err))
+		zapLogger.Fatal("failed to connect to redis", zap.Error(err))
 	}
 	defer redisClient.Close()
 
-	// Initialize Repositories
+	// 9. Dependency Injection: Repositories
 	userRepo := postgres.NewUserRepository(dbPool)
 	sessionRepo := redisrepo.NewSessionRepository(redisClient)
 
-	// Initialize Use Cases
-	authUC := usecase.NewAuthUseCase(userRepo, sessionRepo, keyManager, auditLogger, cfg)
+	// 10. Dependency Injection: Use Cases
+	authUC := usecase.NewAuthUseCase(userRepo, sessionRepo, keyManager, emailSender, auditLogger, cfg)
 	userUC := usecase.NewUserUseCase(userRepo)
+	scimUC := usecase.NewSCIMUseCase(userRepo)
 
-	// Initialize Handlers
+	// 11. Dependency Injection: Handlers
 	authHandler := handler.NewAuthHandler(authUC, keyManager)
 	userHandler := handler.NewUserHandler(userUC)
 	healthHandler := handler.NewHealthHandler(dbPool, redisClient)
+	scimHandler := handler.NewSCIMHandler(scimUC)
 
-	// Router Wiring
+	// 12. Build HTTP Master Router & Middleware Pipeline
 	router := httpdelivery.NewRouter(
-		authHandler, userHandler, healthHandler,
+		authHandler, userHandler, healthHandler, scimHandler,
 		dbPool, redisClient, keyManager, metricsCollector,
 		cfg, zapLogger,
 	)
@@ -92,6 +106,7 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	// 13. Start HTTP Server Non-blocking
 	go func() {
 		zapLogger.Info("enterprise auth-service running", zap.String("port", cfg.AppPort))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -99,6 +114,7 @@ func main() {
 		}
 	}()
 
+	// 14. Graceful Shutdown Signal Interception
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-quit
@@ -109,8 +125,8 @@ func main() {
 	defer shutdownCancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		zapLogger.Fatal("forced server shutdown", zap.Error(err))
+		zapLogger.Fatal("forced shutdown error", zap.Error(err))
 	}
 
-	zapLogger.Info("graceful shutdown completed successfully")
+	zapLogger.Info("server exited safely")
 }

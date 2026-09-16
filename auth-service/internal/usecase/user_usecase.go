@@ -11,7 +11,7 @@ import (
 
 type UserUseCase interface {
 	GetProfile(ctx context.Context, id uuid.UUID) (*domain.User, error)
-	ListUsers(ctx context.Context, pq domain.PaginationQuery) (*domain.PaginatedResult, error)
+	ListUsers(ctx context.Context, tenantID uuid.UUID, pq domain.PaginationQuery) (*domain.PaginatedResult, error)
 }
 
 type userUseCase struct {
@@ -26,7 +26,7 @@ func (u *userUseCase) GetProfile(ctx context.Context, id uuid.UUID) (*domain.Use
 	return u.userRepo.GetByID(ctx, id)
 }
 
-func (u *userUseCase) ListUsers(ctx context.Context, pq domain.PaginationQuery) (*domain.PaginatedResult, error) {
+func (u *userUseCase) ListUsers(ctx context.Context, tenantID uuid.UUID, pq domain.PaginationQuery) (*domain.PaginatedResult, error) {
 	if pq.Page < 1 {
 		pq.Page = 1
 	}
@@ -36,7 +36,7 @@ func (u *userUseCase) ListUsers(ctx context.Context, pq domain.PaginationQuery) 
 		pq.Limit = 100
 	}
 
-	users, total, err := u.userRepo.List(ctx, pq)
+	users, total, err := u.userRepo.List(ctx, tenantID, pq)
 	if err != nil {
 		return nil, err
 	}

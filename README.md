@@ -35,64 +35,26 @@ This service implements zero-trust asymmetric cryptography (`RS256`), dynamic RF
 The system isolates domain logic from infrastructure adapters using a multi-tiered Clean Architecture approach:
 
 ```text
-               HTTP Requests (Clients / API Gateways)
-                               │
-                               ▼
- ┌───────────────────────────────────────────────────────────┐
- │               Presentation / Delivery Layer               │
- │  • Router & Handlers (Auth, User, Health)                 │
- │  • Middlewares: RS256 Auth, RBAC, Rate-Limit, Metrics     │
- └─────────────────────────────┬─────────────────────────────┘
-                               │ (DTOs)
-                               ▼
- ┌───────────────────────────────────────────────────────────┐
- │                       Use Case Layer                      │
- │  • Core Application Business Logic                        │
- │  • Session Management & Token Rotation                    │
- └──────────────┬─────────────────────────────┬──────────────┘
-                │                             │
-                ▼                             ▼
- ┌───────────────────────────┐   ┌───────────────────────────┐
- │       Domain Layer        │   │  Infrastructure Adapters  │
- │ • Entities (User, Role)   │   │ • PostgreSQL (pgxpool)    │
- │ • Repository Interfaces   │   │ • Redis (Sessions & Rate) │
- │ • Error Definitions       │   │ • KeyManager (RSA-4096)   │
- │ • Permission Matrix       │   │ • Metrics & Zap Logger    │
- └───────────────────────────┘   └───────────────────────────┘
+ ┌─────────────────────────────────────────────────────────────┐
+ │                HTTP Delivery / Transport Layer              │
+ │  (Handlers, Middlewares: RateLimit, Auth, RBAC, Metrics)    │
+ └──────────────────────────────┬──────────────────────────────┘
+                                │
+ ┌──────────────────────────────▼──────────────────────────────┐
+ │                      Use Case Layer                         │
+ │        (Business Logic, Auth Flow, Session Rules)           │
+ └──────────────────────────────┬──────────────────────────────┘
+                                │
+ ┌──────────────────────────────▼──────────────────────────────┐
+ │                       Domain Layer                          │
+ │      (Pure Entities, Errors, Claims, Role Definitions)      │
+ └──────────────────────────────▲──────────────────────────────┘
+                                │
+ ┌──────────────────────────────┴──────────────────────────────┐
+ │            Infrastructure & Repository Data Layer           │
+ │(PostgreSQL pgxpool, Redis Store, Prometheus, Zap, Migrator) │
+ └─────────────────────────────────────────────────────────────┘
 ```
-
-1. **Independent Domain:** Domain logic has no dependencies on databases, HTTP libraries, or third-party frameworks.
-2. **Defensive Boundaries:** Request bodies are strictly restricted to 1 MB using `http.MaxBytesReader` to eliminate resource exhaustion and OOM vulnerabilities.
-3. **Decoupled Key Management:** Downstream microservices verify authenticity purely in-memory using public keys retrieved from `/.well-known/jwks.json`.
-
----
-
-## Enterprise Security & Production Standards
-
-| Pillar | Implementation | Technical Advantage |
-| :--- | :--- | :--- |
-| **Cryptography** | **RS256 (RSA-4096)** Asymmetric Signing | Eliminates shared symmetric secrets. The IAM service signs tokens using a private key; all downstream services verify via the public JWKS endpoint. |
-| **Session Control** | **15-Min Access + Redis Refresh Rotation** | Short-lived access tokens limit exposure. Refresh tokens are single-use, cryptographically random hashes with automatic rotation and instant revocation. |
-| **Authorization** | **Role-Based Access Control (RBAC)** | Granular permission-to-role mappings (`read:profile`, `manage:system`) validated by middleware. |
-| **Privilege Safety** | **Zero Public Role Escalation** | Public registration defaults strictly to `USER`. Admin accounts cannot be provisioned or escalated through public API endpoints. |
-| **Concurrency** | **PostgreSQL Unique Constraints (`23505`)** | Prevents Time-of-Check to Time-of-Use (TOCTOU) race conditions during concurrent registrations. |
-| **Traffic Shaping** | **Distributed Token-Bucket (Redis Lua)** | Atomic, proxy-aware (`X-Forwarded-For`) sliding rate limiter enforced across multi-replica deployments. |
-| **Observability** | **Prometheus + Uber Zap JSON** | Four Golden Signals exposed via `/metrics` alongside structured logs tracking `request_id` and `trace_id`. |
-| **Compliance** | **Immutable Security Audit Log** | Explicit logging trail (`SECURITY_AUDIT_TRAIL`) logging event type, actor email, IP address, and timestamps. |
-
----
-
-## Technology Stack
-
-- **Language:** Go 1.22+
-- **Database:** PostgreSQL 16 (via `jackc/pgx/v5` connection pool)
-- **Cache / Distributed State:** Redis 7 (via `redis/go-redis/v9`)
-- **Asymmetric Tokens:** `golang-jwt/jwt/v5` & RSA-4096
-- **Password Hashing:** `golang.org/x/crypto/bcrypt`
-- **Telemetry & Metrics:** `prometheus/client_golang`
-- **Structured Logging:** `go.uber.org/zap`
-- **Schema Migrations:** `golang-migrate/migrate/v4`
-- **Unit Testing & Mocking:** `stretchr/testify`
 
 ---
 
@@ -431,4 +393,4 @@ curl http://localhost:8080/.well-known/jwks.json
 
 ## License
 
-This project is open-source software licensed under the [MIT License](LICENSE).
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.

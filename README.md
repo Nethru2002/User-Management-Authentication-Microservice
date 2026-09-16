@@ -38,7 +38,7 @@ The microservice follows a decoupled, multi-tier **Clean Architecture** (Ports a
 
 ```text
  ┌─────────────────────────────────────────────────────────────┐
- │                HTTP Delivery / Transport Layer             │
+ │                HTTP Delivery / Transport Layer              │
  │  (Handlers, Middlewares: RateLimit, Auth, RBAC, Metrics)    │
  └──────────────────────────────┬──────────────────────────────┘
                                 │
@@ -54,7 +54,7 @@ The microservice follows a decoupled, multi-tier **Clean Architecture** (Ports a
                                 │
  ┌──────────────────────────────┴──────────────────────────────┐
  │            Infrastructure & Repository Data Layer           │
- │ (PostgreSQL pgxpool, Redis Store, Prometheus, Zap, Migrator) │
+ │(PostgreSQL pgxpool, Redis Store, Prometheus, Zap, Migrator) │
  └─────────────────────────────────────────────────────────────┘
 ```
 
